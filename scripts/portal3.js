@@ -1142,18 +1142,18 @@ async function fetchJobs() {
                     const flexibleTerm = keyword.replace(/\s+/g, '%');
 
                     const cols = [
-                        `Company.ilike."%${flexibleTerm}%"`,
-                        `Description.ilike."%${flexibleTerm}%"`,
-                        `Category.ilike."%${flexibleTerm}%"`,
-                        `Location.ilike."%${flexibleTerm}%"`,
-                        `"Primary Domain".ilike."%${flexibleTerm}%"`
+                        `Company.ilike.%${flexibleTerm}%`,
+                        `Description.ilike.%${flexibleTerm}%`,
+                        `Category.ilike.%${flexibleTerm}%`,
+                        `Location.ilike.%${flexibleTerm}%`,
+                        `"Primary Domain".ilike.%${flexibleTerm}%`
                     ];
 
                     if (currentTable === "Fresher Jobs") {
-                        cols.push(`"Secondary Domain".ilike."%${flexibleTerm}%"`);
+                        cols.push(`"Secondary Domain".ilike.%${flexibleTerm}%`);
                         cols.push(`Tags.cs.{"${keyword}"}`);
                     } else if (currentTable === "Semi Qualified Jobs") {
-                        cols.push(`"Secondary Domain".ilike."%${flexibleTerm}%"`);
+                        cols.push(`"Secondary Domain".ilike.%${flexibleTerm}%`);
                         cols.push(`Tags.cs.{"${keyword}"}`);
                     } else if (currentTable === "Industrial Training Job Portal") {
                         cols.push(`"Functional Tags".cs.{"${keyword}"}`);
@@ -1259,6 +1259,44 @@ async function fetchJobs() {
 
         if (!error && data && state.sortBy === 'popular') {
             data.sort((a, b) => (b.application_count || 0) - (a.application_count || 0));
+        }
+
+        if (!error && data && state.keywords.length > 0) {
+            data = data.filter(job => {
+                return state.keywords.every(kw => {
+                    const kwClean = kw.toLowerCase().trim();
+                    const kwNoSpace = kwClean.replace(/\s+/g, '');
+
+                    const company = (job.Company || '').toLowerCase();
+                    const role = (job.Role || '').toLowerCase();
+                    const category = (job.Category || '').toLowerCase();
+                    const location = (job.Location || '').toLowerCase();
+                    const primaryDomain = (job['Primary Domain'] || '').toLowerCase();
+                    const secondaryDomain = (job['Secondary Domain'] || '').toLowerCase();
+                    const companyType = (job['Company Type'] || '').toLowerCase();
+                    const industryType = (job['Industry Type'] || '').toLowerCase();
+                    const tags = (Array.isArray(job.Tags) ? job.Tags.join(' ') : (job.Tags || '')).toLowerCase();
+                    const funcTags = (Array.isArray(job['Functional Tags']) ? job['Functional Tags'].join(' ') : (job['Functional Tags'] || '')).toLowerCase();
+                    const techTags = (Array.isArray(job['Technology Tags']) ? job['Technology Tags'].join(' ') : (job['Technology Tags'] || '')).toLowerCase();
+
+                    const structuredText = `${company} ${role} ${category} ${location} ${primaryDomain} ${secondaryDomain} ${companyType} ${industryType} ${tags} ${funcTags} ${techTags}`;
+
+                    // Direct match in structured fields (Company, Role, Category, Location, Domain, Tags)
+                    if (structuredText.includes(kwClean) || (kwNoSpace && structuredText.includes(kwNoSpace))) {
+                        return true;
+                    }
+
+                    // Description fallback: Do not match if the search term is a company name and the job belongs to a different company
+                    const description = (job.Description || '').toLowerCase();
+                    if (description.includes(kwClean) || (kwNoSpace && description.includes(kwNoSpace))) {
+                        // Check if the keyword matches Company, Role, Category, or Tags of any other job (e.g. "Amazon")
+                        // If it's a description-only match for a completely different company (like YesMadam), exclude it
+                        return false;
+                    }
+
+                    return false;
+                });
+            });
         }
 
         if (error) throw error;
@@ -2399,7 +2437,7 @@ function setupEventListeners() {
     dom.modalCloseBtn.addEventListener('click', closeModal);
     // dom.loadMoreButton.addEventListener('click', () => fetchJobs()); // Removed
 
-    [dom.searchInputMobile, dom.searchInputDesktop].forEach(input => {
+    [dom.searchInputMobile, dom.searchInputDesktop, dom.dv2TopSearchInput].forEach(input => {
         if (input) {
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
@@ -2407,7 +2445,7 @@ function setupEventListeners() {
                     processAndApplySearch(input);
                 }
             });
-            const searchButton = input.parentElement.querySelector('.search-button');
+            const searchButton = input.parentElement?.querySelector('.search-button, .dv2-top-search-btn') || (input === dom.dv2TopSearchInput ? dom.dv2TopSearchBtn : null);
             if (searchButton) {
                 searchButton.addEventListener('click', () => processAndApplySearch(input));
             }
@@ -2779,6 +2817,8 @@ async function initializePage() {
     dom.modalCloseBtn = document.getElementById('modalCloseBtn');
     dom.searchInputMobile = document.getElementById('searchInputMobile');
     dom.searchInputDesktop = document.getElementById('searchFilterDesktop');
+    dom.dv2TopSearchInput = document.getElementById('dv2TopSearchInput');
+    dom.dv2TopSearchBtn = document.getElementById('dv2TopSearchBtn');
     dom.sortBySelect = document.getElementById('sortBySelect');
     dom.sortBySelectMobile = document.getElementById('sortBySelectMobile');
     // dom.loadMoreButton = document.getElementById('loadMore'); // Removed
